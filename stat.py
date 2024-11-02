@@ -8,7 +8,6 @@ Version: 1.0
 Description: A clone of stat from GNU Coreutils in Python3  
 Example of use: python3 stat.py --format="%s %n" fichier.txt
 '''
-
 import os
 import sys
 import stat
@@ -60,7 +59,7 @@ Format sequences for files:
 """
     print(help_text.strip())
 
-def parse_format(fmt, stats, follow_symlinks, selinux_context=None):
+def parse_format(fmt, stats, path, follow_symlinks, selinux_context=None):
     """Interpret format sequences based on file stats."""
     replacements = {
         "%a": oct(stats.st_mode & 0o777)[2:],
@@ -148,9 +147,9 @@ def main():
                 continue
 
             if custom_format:
-                output = parse_format(custom_format, stats, follow_symlinks)
+                output = parse_format(custom_format, stats, path, follow_symlinks)
             elif printf_format:
-                output = parse_format(printf_format, stats, follow_symlinks).replace("\\n", "\n").replace("\\t", "\t")
+                output = parse_format(printf_format, stats, path, follow_symlinks).replace("\\n", "\n").replace("\\t", "\t")
             elif terse:
                 output = f"{stats.st_mode} {stats.st_uid} {stats.st_gid} {stats.st_size} {stats.st_mtime} {path}"
             else:
