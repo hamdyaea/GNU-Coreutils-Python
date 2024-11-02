@@ -35,7 +35,6 @@ Format sequences for files:
   %A    Access rights in human readable form
   %b    Number of blocks allocated
   %B    The size in bytes of each block
-  %C    SELinux security context string
   %d    Device number in decimal
   %D    Device number in hex
   %f    Raw mode in hex
@@ -62,6 +61,7 @@ Format sequences for files:
     print(help_text.strip())
 
 def parse_format(fmt, stats, follow_symlinks, selinux_context=None):
+    """Interpret format sequences based on file stats."""
     replacements = {
         "%a": oct(stats.st_mode & 0o777)[2:],
         "%A": stat.filemode(stats.st_mode),
@@ -72,7 +72,6 @@ def parse_format(fmt, stats, follow_symlinks, selinux_context=None):
         "%f": hex(stats.st_mode),
         "%F": "symbolic link" if stat.S_ISLNK(stats.st_mode) else "regular file",
         "%g": stats.st_gid,
-        "%G": os.getgrgid(stats.st_gid).gr_name if os.name != 'nt' else "N/A",
         "%h": stats.st_nlink,
         "%i": stats.st_ino,
         "%n": os.path.basename(path),
@@ -82,7 +81,6 @@ def parse_format(fmt, stats, follow_symlinks, selinux_context=None):
         "%t": hex(os.major(stats.st_dev)),
         "%T": hex(os.minor(stats.st_dev)),
         "%u": stats.st_uid,
-        "%U": os.getpwuid(stats.st_uid).pw_name if os.name != 'nt' else "N/A",
         "%x": time.ctime(stats.st_atime),
         "%X": int(stats.st_atime),
         "%y": time.ctime(stats.st_mtime),
@@ -91,6 +89,16 @@ def parse_format(fmt, stats, follow_symlinks, selinux_context=None):
         "%Z": int(stats.st_ctime),
         "%C": selinux_context if selinux_context else "N/A"
     }
+
+    # Handle Unix-specific attributes if available
+    if os.name != 'nt':
+        import pwd
+        import grp
+        replacements["%G"] = grp.getgrgid(stats.st_gid).gr_name
+        replacements["%U"] = pwd.getpwuid(stats.st_uid).pw_name
+    else:
+        replacements["%G"] = "N/A"
+        replacements["%U"] = "N/A"
 
     for key, value in replacements.items():
         fmt = fmt.replace(key, str(value))
