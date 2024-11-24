@@ -2,104 +2,167 @@
 '''
 Name: Hamdy Abou El Anein
 Email: hamdy.aea@protonmail.com
-Date of creation:  18-11-2024
-Last update: 18-11-2024
+Date of creation:  24-11-2024
+Last update: 24-11-2024
 Version: 1.0
-Description: The base64 GNU coreutils command in Python3.  
-Example of use: python3 base64 input.txt
+Description: The base64 command from GNU coreutils in Python3.  
+Example of use: echo "Hello World" | python3 pybase64.py
 '''
-import argparse
-import base64
+
+
 import sys
+import base64
+import argparse
+from typing import BinaryIO, Optional
 
-VERSION = "1.0"
+class Base64Tool:
+    def __init__(self, args: argparse.Namespace):
+        self.args = args
+        self.wrap_column = args.wrap if args.wrap != 0 else None
+        self.buffer_size = 8192  # Read buffer size for efficient processing
 
-def encode_file(file, wrap_length=76):
-    """
-    Encode the contents of the file in base64 and print to standard output.
-    """
-    with open(file, "rb") as f:
-        data = f.read()
-        # Correct use of base64 encoding
-        encoded_data = base64.b64encode(data).decode("utf-8")
+    def process_stream(self, input_stream: BinaryIO, output_stream: BinaryIO) -> None:
+        """Process input stream and write to output stream."""
+        try:
+            if self.args.decode:
+                self._decode_stream(input_stream, output_stream)
+            else:
+                self._encode_stream(input_stream, output_stream)
+        except (base64.binascii.Error, UnicodeDecodeError) as e:
+            print(f"base64: invalid input: {str(e)}", file=sys.stderr)
+            sys.exit(1)
 
-        # Wrap encoded data to the specified wrap length
-        if wrap_length > 0:
-            wrapped_data = "\n".join([encoded_data[i:i + wrap_length] for i in range(0, len(encoded_data), wrap_length)])
-            print(wrapped_data)
-        else:
-            print(encoded_data)
-
-def decode_file(file, ignore_garbage=False):
-    """
-    Decode the base64 encoded file and print to standard output.
-    """
-    with open(file, "r") as f:
-        data = f.read()
-
-        # Decode data, ignoring non-alphabet characters if --ignore-garbage is set
-        if ignore_garbage:
-            data = "".join([c for c in data if c.isalnum() or c in '+/='])
+    def _encode_stream(self, input_stream: BinaryIO, output_stream: BinaryIO) -> None:
+        """Encode binary input stream to base64."""
+        # Initialize variables for line wrapping
+        current_line_length = 0
         
-        decoded_data = base64.b64decode(data)
+        while True:
+            chunk = input_stream.read(self.buffer_size)
+            if not chunk:
+                break
 
-        # Print decoded data as text
-        sys.stdout.buffer.write(decoded_data)
+            # Encode chunk
+            encoded = base64.b64encode(chunk)
+            
+            # Handle line wrapping
+            if self.wrap_column is not None:
+                # Process the encoded data in parts to maintain line length
+                encoded_str = encoded.decode('ascii')
+                while encoded_str:
+                    available_space = self.wrap_column - current_line_length
+                    if available_space <= 0:
+                        output_stream.write(b'\n')
+                        current_line_length = 0
+                        available_space = self.wrap_column
+                    
+                    # Write as much as fits on the current line
+                    part = encoded_str[:available_space]
+                    output_stream.write(part.encode('ascii'))
+                    encoded_str = encoded_str[available_space:]
+                    current_line_length += len(part)
+            else:
+                # Write without wrapping
+                output_stream.write(encoded)
+        
+        # Add final newline if we were wrapping
+        if self.wrap_column is not None and current_line_length > 0:
+            output_stream.write(b'\n')
 
-def process_input_data(is_decode, ignore_garbage, wrap_length, file):
-    """
-    Process data depending on whether encoding or decoding is requested.
-    """
-    if is_decode:
-        decode_file(file, ignore_garbage)
-    else:
-        encode_file(file, wrap_length)
+    def _decode_stream(self, input_stream: BinaryIO, output_stream: BinaryIO) -> None:
+        """Decode base64 input stream to binary."""
+        # For decoding, we need to accumulate the entire input to handle
+        # potential line breaks and padding correctly
+        encoded_data = b''
+        
+        for line in input_stream:
+            # Skip empty lines
+            if not line.strip():
+                continue
+            encoded_data += line.strip()
+        
+        # Handle padding if missing
+        missing_padding = len(encoded_data) % 4
+        if missing_padding:
+            encoded_data += b'=' * (4 - missing_padding)
+        
+        # Decode and write
+        decoded_data = base64.b64decode(encoded_data)
+        output_stream.write(decoded_data)
 
-def main():
-    """
-    Main entry point for the script.
-    """
+    def process_files(self) -> None:
+        """Process input and output files based on command line arguments."""
+        try:
+            # Handle input file
+            if self.args.input_file and self.args.input_file != '-':
+                with open(self.args.input_file, 'rb') as infile:
+                    if self.args.output_file and self.args.output_file != '-':
+                        with open(self.args.output_file, 'wb') as outfile:
+                            self.process_stream(infile, outfile)
+                    else:
+                        self.process_stream(infile, sys.stdout.buffer)
+            else:
+                if self.args.output_file and self.args.output_file != '-':
+                    with open(self.args.output_file, 'wb') as outfile:
+                        self.process_stream(sys.stdin.buffer, outfile)
+                else:
+                    self.process_stream(sys.stdin.buffer, sys.stdout.buffer)
+        
+        except IOError as e:
+            print(f"base64: {str(e)}", file=sys.stderr)
+            sys.exit(1)
+
+def parse_arguments() -> argparse.Namespace:
+    """Parse command line arguments."""
     parser = argparse.ArgumentParser(
-        description="Base64 encode or decode data and print to standard output."
+        description='base64 encode or decode FILE, or standard input, to standard output.',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog='''Examples:
+  base64.py file        Encode FILE to standard output
+  base64.py -d file     Decode FILE to standard output
+  base64.py -w 76 file  Encode FILE with line wrapping at column 76'''
     )
+    
     parser.add_argument(
-        "file",
-        nargs="?",
-        default="-",
-        help="File to encode or decode (default is standard input).",
+        'input_file',
+        nargs='?',
+        help='input file (default: stdin)',
+        default='-'
     )
+    
     parser.add_argument(
-        "-d", "--decode", action="store_true", help="Decode data."
+        '-d', '--decode',
+        action='store_true',
+        help='decode data'
     )
+    
     parser.add_argument(
-        "-i", "--ignore-garbage", action="store_true", help="Ignore non-alphabet characters when decoding."
+        '-i', '--ignore-garbage',
+        action='store_true',
+        help='when decoding, ignore non-alphabet characters'
     )
+    
     parser.add_argument(
-        "-w", "--wrap", type=int, default=76, help="Wrap encoded lines after COLS characters (default 76). Use 0 to disable line wrapping."
+        '-w', '--wrap',
+        type=int,
+        default=76,
+        help='wrap encoded lines after COLS character (default 76, 0 to disable wrapping)'
     )
+    
     parser.add_argument(
-        "--version", action="version", version=f"base64.py {VERSION}", help="Output version information and exit."
+        '-o', '--output',
+        dest='output_file',
+        help='output file (default: stdout)',
+        default='-'
     )
 
-    args = parser.parse_args()
+    return parser.parse_args()
 
-    if args.file == "-":
-        # Reading from standard input if no file is specified
-        if args.decode:
-            data = sys.stdin.read()
-            # Decode from input
-            decoded_data = base64.b64decode(data)
-            sys.stdout.buffer.write(decoded_data)
-        else:
-            data = sys.stdin.read()
-            # Encode input data
-            encoded_data = base64.b64encode(data.encode()).decode("utf-8")
-            sys.stdout.write(encoded_data)
-    else:
-        # Use specified file
-        process_input_data(args.decode, args.ignore_garbage, args.wrap, args.file)
+def main() -> None:
+    """Main program entry point."""
+    args = parse_arguments()
+    base64_tool = Base64Tool(args)
+    base64_tool.process_files()
 
-
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()
-
