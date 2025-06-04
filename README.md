@@ -13,4 +13,4 @@ This repository contains Python scripts that emulate the behavior of popular GNU
    git clone https://github.com/hamdyaea/GNU-Coreutils-Python.git
    ```
 
-
+<!-- GitAds-Verify: I82ZSDRB4TBGTZ5IJKZJRGKIEE13CI4V -->
