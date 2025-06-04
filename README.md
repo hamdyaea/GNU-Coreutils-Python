@@ -11,12 +11,13 @@ This repository contains Python scripts that emulate the behavior of popular GNU
 1. Clone this repository:
    ```bash
    git clone https://github.com/hamdyaea/GNU-Coreutils-Python.git
-   ```   <br> 
-      <br>
-     <br>
-     <br>
-     <br>
-      <br>
+   ```       
+U+000A
+U+000A
+U+000A              
+U+000A
+U+000A        
+                        
 ## GitAds Sponsored
 [![Sponsored by GitAds](https://gitads.dev/v1/ad-serve?source=hamdyaea/gnu-coreutils-python@github)](https://gitads.dev/v1/ad-track?source=hamdyaea/gnu-coreutils-python@github)
 
