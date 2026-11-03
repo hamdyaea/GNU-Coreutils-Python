@@ -24,3 +24,12 @@ This repository contains Python scripts that emulate the behavior of popular GNU
 
 
 <!-- GitAds-Verify: I82ZSDRB4TBGTZ5IJKZJRGKIEE13CI4V -->
+
+
+## Safety maintenance
+
+Maintainer: Hamdy Abou El Anein — hamdy.aea@protonmail.com
+
+`rm.py` now requires `-r` for recursive removal, supports empty-directory removal with `-d`, unlinks directory and dangling symlinks without traversing their targets, respects per-file confirmation, and reports errors with a nonzero exit status. Filesystem root and dot operands are always protected. Run `python3 -m unittest -v test_rm_safety`: all destructive test operations are confined to temporary directories.
+
+This educational collection is not a drop-in GNU Coreutils replacement. Mixed `-f`/`-i` ordering and race-resistant fd-based traversal are not implemented; do not use it on untrusted concurrently modified trees. Other commands have independent compatibility gaps (for example cp parses interactive flags without implementing the prompt, and wc differs on empty or unterminated input). Contributor attribution, including Mehdi Marhol in pwd.py, is preserved. Review the PR before using any file-modifying command.

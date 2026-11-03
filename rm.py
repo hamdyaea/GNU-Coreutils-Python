@@ -1,89 +1,73 @@
 #!/usr/bin/env python3
-'''
-Name: Hamdy Abou El Anein
-Email: hamdy.aea@protonmail.com
-Date of creation:  3-11-2024
-Last update: 3-11-2024
-Version: 1.0
-Description: The rm command from coreutils in Python3.  
-Example of use: python3 rm.py fichier.txt
-'''
-import os
-import sys
+# Developer: Hamdy Abou El Anein
+# Contact: hamdy.aea@protonmail.com
+"""Educational rm subset with explicit recursion and symlink-safe traversal."""
 import argparse
+import os
+from pathlib import Path
+import sys
 
-def remove_file(filepath, force, interactive, verbose):
-    """Remove a single file with options for interaction and verbosity."""
-    if not os.path.exists(filepath):
-        if verbose:
-            print(f"rm: '{filepath}': No such file or directory")
-        return
 
-    if not os.access(filepath, os.W_OK) and not force:
-        if interactive:
-            response = input(f"rm: remove write-protected regular file '{filepath}'? (y/n) ")
-            if response.lower() != 'y':
-                print(f"Skipping '{filepath}'")
-                return
-        elif not force:
-            print(f"rm: '{filepath}': Permission denied")
+def confirm(path):
+    return input(f"rm: remove '{path}'? [y/N] ").strip().lower() == "y"
+
+
+def remove(path, *, recursive=False, directory=False, force=False, interactive=False, verbose=False):
+    path = Path(path)
+    if path.name in (".", "..") or str(path) == ".":
+        raise OSError("refusing to remove '.' or '..'")
+    if not path.is_symlink() and path.resolve() == Path("/"):
+        raise OSError("refusing to remove the filesystem root")
+    if not os.path.lexists(path):
+        if force:
             return
-
-    os.remove(filepath)
-    if verbose:
-        print(f"Removed '{filepath}'")
-
-def remove_directory(dirpath, force, interactive, verbose):
-    """Recursively remove a directory."""
-    if not os.path.exists(dirpath):
-        if verbose:
-            print(f"rm: '{dirpath}': No such file or directory")
-        return
-    
-    if not os.path.isdir(dirpath):
-        remove_file(dirpath, force, interactive, verbose)
-        return
-
-    if interactive:
-        response = input(f"rm: remove directory '{dirpath}'? (y/n) ")
-        if response.lower() != 'y':
-            print(f"Skipping directory '{dirpath}'")
+        raise FileNotFoundError(f"{path}: no such file or directory")
+    if path.is_symlink() or not path.is_dir():
+        if interactive and not confirm(path):
             return
-
-    for root, dirs, files in os.walk(dirpath, topdown=False):
-        for name in files:
-            remove_file(os.path.join(root, name), force, interactive, verbose)
-        for name in dirs:
-            os.rmdir(os.path.join(root, name))
-
-    os.rmdir(dirpath)
+        path.unlink()
+    elif recursive:
+        if interactive and not confirm(path):
+            return
+        for child in path.iterdir():
+            remove(child, recursive=True, directory=directory, force=force,
+                   interactive=interactive, verbose=verbose)
+        path.rmdir()
+    elif directory:
+        if interactive and not confirm(path):
+            return
+        path.rmdir()
+    else:
+        raise IsADirectoryError(f"{path}: is a directory (use -r or -d)")
     if verbose:
-        print(f"Removed directory '{dirpath}'")
+        print(f"removed '{path}'")
 
-def main():
-    parser = argparse.ArgumentParser(description="Remove (unlink) the FILE(s).")
-    parser.add_argument('files', nargs='+', help='Files to remove')
-    parser.add_argument('-f', '--force', action='store_true', help='ignore nonexistent files and arguments, never prompt')
-    parser.add_argument('-i', action='store_true', help='prompt before every removal')
-    parser.add_argument('-I', action='store_true', help='prompt once before removing more than three files, or when removing recursively')
-    parser.add_argument('-r', '-R', '--recursive', action='store_true', help='remove directories and their contents recursively')
-    parser.add_argument('-d', '--dir', action='store_true', help='remove empty directories')
-    parser.add_argument('-v', '--verbose', action='store_true', help='explain what is being done')
-    
-    args = parser.parse_args()
 
-    if args.I and len(args.files) > 3:
-        response = input(f"rm: remove {len(args.files)} files? (y/n) ")
-        if response.lower() != 'y':
-            print("Aborting operation.")
-            sys.exit(0)
+def main(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("files", nargs="*")
+    parser.add_argument("-f", "--force", action="store_true")
+    parser.add_argument("-i", action="store_true", help="ask before each removal")
+    parser.add_argument("-I", action="store_true", help="ask once for recursive or large operations")
+    parser.add_argument("-r", "-R", "--recursive", action="store_true")
+    parser.add_argument("-d", "--dir", action="store_true")
+    parser.add_argument("-v", "--verbose", action="store_true")
+    args = parser.parse_args(argv)
+    if not args.files and not args.force:
+        parser.error("missing operand")
+    if args.I and not args.force and (args.recursive or len(args.files) > 3):
+        if input("rm: proceed with requested removals? [y/N] ").strip().lower() != "y":
+            return 0
+    result = 0
+    for name in args.files:
+        try:
+            remove(name, recursive=args.recursive, directory=args.dir, force=args.force,
+                   interactive=args.i and not args.force, verbose=args.verbose)
+        except OSError as exc:
+            print(f"rm: {exc}", file=sys.stderr)
+            result = 1
+    return result
 
-    for file in args.files:
-        if args.recursive or os.path.isdir(file):
-            remove_directory(file, args.force, args.i or args.I, args.verbose)
-        else:
-            remove_file(file, args.force, args.i, args.verbose)
 
 if __name__ == "__main__":
-    main()
-
+    raise SystemExit(main())
